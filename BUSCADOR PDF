@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Busca de Produtos por EAN</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 650px;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 1.8em;
+            margin-bottom: 5px;
+        }
+
+        .header .subtitle {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .status-bar {
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .status-loading {
+            background: #f0f9ff;
+            color: #0369a1;
+        }
+
+        .status-success {
+            background: #f0fdf4;
+            color: #166534;
+        }
+
+        .status-error {
+            background: #fef2f2;
+            color: #991b1b;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 16px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s;
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+        }
+
+        .search-input:disabled {
+            background: #f5f5f5;
+            cursor: not-allowed;
+        }
+
+        .search-button {
+            padding: 16px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .search-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .search-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .result-box {
+            display: none;
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+            margin-top: 20px;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        .result-box.show {
+            display: block;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .found {
+            background: #f0fdf4;
+            border: 2px solid #22c55e;
+        }
+
+        .not-found {
+            background: #fef2f2;
+            border: 2px solid #ef4444;
+        }
+
+        .result-icon {
+            font-size: 3.5em;
+            margin-bottom: 10px;
+        }
+
+        .result-title {
+            font-size: 1.4em;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .found .result-title { color: #166534; }
+        .not-found .result-title { color: #991b1b; }
+
+        .result-ean {
+            display: inline-block;
+            padding: 10px 20px;
+            background: white;
+            border-radius: 8px;
+            font-weight: 500;
+            margin: 8px 0;
+            font-size: 1.1em;
+        }
+
+        .result-message {
+            color: #666;
+            margin: 5px 0;
+        }
+
+        .link-button {
+            display: inline-block;
+            padding: 16px 35px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 15px;
+            transition: all 0.3s;
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .link-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.45);
+        }
+
+        .records-info {
+            text-align: center;
+            font-size: 0.85em;
+            color: #999;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Busca por EAN</h1>
+            <p class="subtitle" id="headerSubtitle">Carregando base de dados...</p>
+        </div>
+
+        <div class="content">
+            <div id="statusBar" class="status-bar status-loading">
+                ⏳ Carregando dados do GitHub...
+            </div>
+
+            <div class="search-box">
+                <input 
+                    type="text" 
+                    id="eanInput" 
+                    class="search-input" 
+                    placeholder="Digite o código EAN do produto"
+                    disabled
+                    autocomplete="off"
+                >
+                <button id="searchButton" onclick="buscarProduto()" class="search-button" disabled>
+                    Buscar
+                </button>
+            </div>
+
+            <div id="resultBox" class="result-box"></div>
+            <div id="recordsInfo" class="records-info"></div>
+        </div>
+    </div>
+
+    <script>
+        // ⚠️ COLOQUE AQUI O LINK RAW DO SEU ARQUIVO NO GITHUB
+        const GITHUB_RAW_URL = "https://github.com/Gc-koch/consulta_item_pln/raw/refs/heads/main/LINK%20PRODUTO.xlsx";
+        
+        let produtos = [];
+        
+        const statusBar = document.getElementById("statusBar");
+        const eanInput = document.getElementById("eanInput");
+        const searchButton = document.getElementById("searchButton");
+        const resultBox = document.getElementById("resultBox");
+        const recordsInfo = document.getElementById("recordsInfo");
+        const headerSubtitle = document.getElementById("headerSubtitle");
+
+        // Função para carregar o Excel do GitHub
+        async function carregarDados() {
+            try {
+                statusBar.className = "status-bar status-loading";
+                statusBar.textContent = "⏳ Carregando dados do GitHub...";
+                
+                const resposta = await fetch(GITHUB_RAW_URL);
+                
+                if (!resposta.ok) {
+                    throw new Error("Arquivo não encontrado");
+                }
+                
+                const arrayBuffer = await resposta.arrayBuffer();
+                const workbook = XLSX.read(arrayBuffer, { type: "array" });
+                
+                const primeiraPlanilha = workbook.SheetNames[0];
+                const planilha = workbook.Sheets[primeiraPlanilha];
+                const dados = XLSX.utils.sheet_to_json(planilha, { header: 1 });
+                
+                produtos = [];
+                
+                for (let i = 1; i < dados.length; i++) {
+                    const linha = dados[i];
+                    if (linha && linha[0] && linha[3]) {
+                        const ean = String(linha[0]).trim();
+                        const link = String(linha[3]).trim();
+                        
+                        if (ean && link && ean !== "undefined" && link !== "undefined") {
+                            produtos.push({ ean, link });
+                        }
+                    }
+                }
+                
+                // Dados carregados com sucesso
+                statusBar.className = "status-bar status-success";
+                statusBar.textContent = `✅ ${produtos.length} produtos carregados com sucesso!`;
+                headerSubtitle.textContent = "Base de dados pronta para consulta";
+                
+                eanInput.disabled = false;
+                searchButton.disabled = false;
+                eanInput.focus();
+                
+                recordsInfo.textContent = `${produtos.length} produtos disponíveis para consulta`;
+                
+            } catch (erro) {
+                console.error("Erro:", erro);
+                statusBar.className = "status-bar status-error";
+                statusBar.textContent = "❌ Erro ao carregar dados. Verifique o link do GitHub.";
+                headerSubtitle.textContent = "Erro na base de dados";
+            }
+        }
+
+        // Função de busca
+        function buscarProduto() {
+            const ean = eanInput.value.trim();
+            
+            if (!ean) {
+                mostrarResultado("not-found", "Digite um código EAN", ean);
+                return;
+            }
+            
+            if (produtos.length === 0) {
+                mostrarResultado("not-found", "Base de dados não carregada", ean);
+                return;
+            }
+            
+            const encontrado = produtos.find(p => p.ean === ean);
+            
+            if (encontrado) {
+                resultBox.className = "result-box found show";
+                resultBox.innerHTML = `
+                    <div class="result-icon">✅</div>
+                    <div class="result-title">Produto Encontrado!</div>
+                    <div class="result-ean">EAN: ${encontrado.ean}</div>
+                    <br>
+                    <a href="${encontrado.link}" target="_blank" class="link-button">
+                        📎 Abrir Documento do Produto
+                    </a>
+                `;
+            } else {
+                resultBox.className = "result-box not-found show";
+                resultBox.innerHTML = `
+                    <div class="result-icon">❌</div>
+                    <div class="result-title">Item Não Encontrado no Planograma</div>
+                    <div class="result-ean">EAN: ${ean}</div>
+                    <p class="result-message">Este código não foi localizado na base de dados.</p>
+                `;
+            }
+            
+            resultBox.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+
+        // Evento Enter
+        eanInput.addEventListener("keypress", function(e) {
+            if (e.key === "Enter" && !searchButton.disabled) {
+                buscarProduto();
+            }
+        });
+
+        // Carregar ao abrir a página
+        window.addEventListener("load", carregarDados);
+    </script>
+</body>
+</html>

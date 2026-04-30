@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Busca de Produtos por EAN</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Biblioteca para leitura de código de barras -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -27,72 +29,62 @@
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             width: 100%;
-            max-width: 650px;
+            max-width: 700px;
             overflow: hidden;
         }
 
         .header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 30px;
+            padding: 25px;
             text-align: center;
         }
 
         .header h1 {
-            font-size: 1.8em;
+            font-size: 1.6em;
             margin-bottom: 5px;
         }
 
         .header .subtitle {
-            font-size: 0.9em;
+            font-size: 0.85em;
             opacity: 0.9;
         }
 
         .content {
-            padding: 30px;
+            padding: 20px;
         }
 
         .status-bar {
             text-align: center;
             padding: 10px;
             border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
+            margin-bottom: 15px;
+            font-size: 13px;
         }
 
-        .status-loading {
-            background: #f0f9ff;
-            color: #0369a1;
-        }
-
-        .status-success {
-            background: #f0fdf4;
-            color: #166534;
-        }
-
-        .status-error {
-            background: #fef2f2;
-            color: #991b1b;
-        }
+        .status-loading { background: #f0f9ff; color: #0369a1; }
+        .status-success { background: #f0fdf4; color: #166534; }
+        .status-error { background: #fef2f2; color: #991b1b; }
 
         .search-box {
             display: flex;
-            gap: 10px;
+            gap: 8px;
+            margin-bottom: 10px;
         }
 
         .search-input {
             flex: 1;
-            padding: 16px 20px;
+            padding: 14px 16px;
             border: 2px solid #e0e0e0;
-            border-radius: 12px;
-            font-size: 16px;
+            border-radius: 10px;
+            font-size: 15px;
             transition: all 0.3s;
             outline: none;
         }
 
         .search-input:focus {
             border-color: #667eea;
-            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
         .search-input:disabled {
@@ -100,35 +92,104 @@
             cursor: not-allowed;
         }
 
-        .search-button {
-            padding: 16px 30px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+        .btn {
+            padding: 14px 20px;
             border: none;
-            border-radius: 12px;
-            font-size: 16px;
+            border-radius: 10px;
+            font-size: 14px;
             font-weight: bold;
             cursor: pointer;
             transition: all 0.3s;
             white-space: nowrap;
         }
 
-        .search-button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        .btn-search {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
         }
 
-        .search-button:disabled {
+        .btn-search:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-search:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
 
+        .btn-scanner {
+            background: #10b981;
+            color: white;
+            font-size: 18px;
+            min-width: 50px;
+        }
+
+        .btn-scanner:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        .btn-scanner.active {
+            background: #ef4444;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .scanner-container {
+            display: none;
+            margin-bottom: 15px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid #10b981;
+        }
+
+        .scanner-container.active {
+            display: block;
+        }
+
+        #reader {
+            width: 100%;
+        }
+
+        .filters-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .filters-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .subcategory-select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            background: white;
+            cursor: pointer;
+        }
+
+        .subcategory-select:focus {
+            border-color: #667eea;
+        }
+
         .result-box {
             display: none;
-            padding: 25px;
+            padding: 20px;
             border-radius: 12px;
-            text-align: center;
-            margin-top: 20px;
+            margin-top: 15px;
             animation: slideUp 0.3s ease-out;
         }
 
@@ -144,52 +205,71 @@
         .found {
             background: #f0fdf4;
             border: 2px solid #22c55e;
+            text-align: center;
         }
 
         .not-found {
             background: #fef2f2;
             border: 2px solid #ef4444;
+            text-align: center;
         }
 
         .result-icon {
-            font-size: 3.5em;
-            margin-bottom: 10px;
+            font-size: 3em;
+            margin-bottom: 8px;
         }
 
         .result-title {
-            font-size: 1.4em;
+            font-size: 1.3em;
             font-weight: bold;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
         }
 
         .found .result-title { color: #166534; }
         .not-found .result-title { color: #991b1b; }
 
-        .result-ean {
-            display: inline-block;
-            padding: 10px 20px;
+        .product-details {
             background: white;
-            border-radius: 8px;
-            font-weight: 500;
-            margin: 8px 0;
-            font-size: 1.1em;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            text-align: left;
         }
 
-        .result-message {
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 14px;
+        }
+
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
             color: #666;
-            margin: 5px 0;
+            font-weight: 500;
+        }
+
+        .detail-value {
+            color: #333;
+            font-weight: 600;
+            text-align: right;
+            word-break: break-all;
         }
 
         .link-button {
             display: inline-block;
-            padding: 16px 35px;
+            padding: 14px 30px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             text-decoration: none;
             border-radius: 10px;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: bold;
-            margin-top: 15px;
+            margin-top: 10px;
             transition: all 0.3s;
             box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
         }
@@ -199,11 +279,35 @@
             box-shadow: 0 10px 30px rgba(102, 126, 234, 0.45);
         }
 
+        .subcategory-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+            justify-content: center;
+        }
+
+        .subcategory-link {
+            padding: 10px 18px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .subcategory-link:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
+
         .records-info {
             text-align: center;
-            font-size: 0.85em;
+            font-size: 0.8em;
             color: #999;
-            margin-top: 15px;
+            margin-top: 10px;
         }
     </style>
 </head>
@@ -219,27 +323,45 @@
                 ⏳ Carregando dados...
             </div>
 
+            <!-- Scanner de código de barras -->
+            <div id="scannerContainer" class="scanner-container">
+                <div id="reader"></div>
+            </div>
+
+            <!-- Campo de busca -->
             <div class="search-box">
                 <input 
                     type="text" 
                     id="eanInput" 
                     class="search-input" 
-                    placeholder="Digite o código EAN do produto"
+                    placeholder="Digite ou escaneie o código EAN"
                     disabled
                     autocomplete="off"
                 >
-                <button id="searchButton" onclick="buscarProduto()" class="search-button" disabled>
+                <button id="scannerButton" class="btn btn-scanner" onclick="toggleScanner()" disabled title="Escanear código de barras">
+                    📷
+                </button>
+                <button id="searchButton" onclick="buscarProduto()" class="btn btn-search" disabled>
                     Buscar
                 </button>
             </div>
 
+            <!-- Filtro de subcategoria -->
+            <div class="filters-section">
+                <div class="filters-title">📂 Filtrar por Subcategoria</div>
+                <select id="subcategorySelect" class="subcategory-select" onchange="filtrarPorSubcategoria()">
+                    <option value="">Todas as subcategorias</option>
+                </select>
+            </div>
+
+            <!-- Resultado -->
             <div id="resultBox" class="result-box"></div>
             <div id="recordsInfo" class="records-info"></div>
         </div>
     </div>
 
     <script>
-        // Links alternativos para tentar carregar o arquivo
+        // URLs do arquivo Excel
         const URLS = [
             "https://raw.githubusercontent.com/Gc-koch/consulta_item_pln/main/LINK%20PRODUTO.xlsx",
             "https://github.com/Gc-koch/consulta_item_pln/raw/main/LINK%20PRODUTO.xlsx",
@@ -247,32 +369,29 @@
         ];
         
         let produtos = [];
+        let scannerAtivo = false;
+        let html5QrCode = null;
         
         const statusBar = document.getElementById("statusBar");
         const eanInput = document.getElementById("eanInput");
         const searchButton = document.getElementById("searchButton");
+        const scannerButton = document.getElementById("scannerButton");
         const resultBox = document.getElementById("resultBox");
         const recordsInfo = document.getElementById("recordsInfo");
         const headerSubtitle = document.getElementById("headerSubtitle");
+        const scannerContainer = document.getElementById("scannerContainer");
+        const subcategorySelect = document.getElementById("subcategorySelect");
 
-        // Função para tentar carregar de múltiplas URLs
+        // Carregar dados do Excel
         async function carregarDados() {
             for (let i = 0; i < URLS.length; i++) {
                 try {
                     statusBar.className = "status-bar status-loading";
-                    statusBar.textContent = `⏳ Tentando carregar dados... (${i + 1}/${URLS.length})`;
+                    statusBar.textContent = `⏳ Carregando dados...`;
                     
-                    console.log("Tentando URL:", URLS[i]);
+                    const resposta = await fetch(URLS[i], { mode: 'cors', credentials: 'omit' });
                     
-                    const resposta = await fetch(URLS[i], {
-                        mode: 'cors',
-                        credentials: 'omit'
-                    });
-                    
-                    if (!resposta.ok) {
-                        console.log("URL falhou:", URLS[i], "Status:", resposta.status);
-                        continue;
-                    }
+                    if (!resposta.ok) continue;
                     
                     const arrayBuffer = await resposta.arrayBuffer();
                     const workbook = XLSX.read(arrayBuffer, { type: "array" });
@@ -282,32 +401,45 @@
                     const dados = XLSX.utils.sheet_to_json(planilha, { header: 1 });
                     
                     produtos = [];
+                    const subcategorias = new Set();
                     
                     for (let j = 1; j < dados.length; j++) {
                         const linha = dados[j];
                         if (linha && linha[0] && linha[3]) {
                             const ean = String(linha[0]).trim();
+                            const id = linha[1] ? String(linha[1]).trim() : "";
+                            const nome = linha[2] ? String(linha[2]).trim() : "";
                             const link = String(linha[3]).trim();
+                            const subcategoria = linha[4] ? String(linha[4]).trim() : "";
                             
                             if (ean && link && ean !== "undefined" && link !== "undefined") {
-                                produtos.push({ ean, link });
+                                produtos.push({ ean, id, nome, link, subcategoria });
+                                if (subcategoria) subcategorias.add(subcategoria);
                             }
                         }
                     }
                     
-                    // Sucesso!
+                    // Preencher select de subcategorias
+                    subcategorySelect.innerHTML = '<option value="">Todas as subcategorias</option>';
+                    subcategorias.forEach(sub => {
+                        const option = document.createElement("option");
+                        option.value = sub;
+                        option.textContent = sub;
+                        subcategorySelect.appendChild(option);
+                    });
+                    
+                    // Sucesso
                     statusBar.className = "status-bar status-success";
-                    statusBar.textContent = `✅ ${produtos.length} produtos carregados com sucesso!`;
+                    statusBar.textContent = `✅ ${produtos.length} produtos carregados!`;
                     headerSubtitle.textContent = "Base de dados pronta para consulta";
                     
                     eanInput.disabled = false;
                     searchButton.disabled = false;
+                    scannerButton.disabled = false;
                     eanInput.focus();
                     
-                    recordsInfo.textContent = `${produtos.length} produtos disponíveis para consulta`;
+                    recordsInfo.textContent = `${produtos.length} produtos | ${subcategorias.size} subcategorias`;
                     
-                    console.log("✅ Carregado com sucesso da URL:", URLS[i]);
-                    console.log("📦 Produtos:", produtos.slice(0, 3), "...");
                     return;
                     
                 } catch (erro) {
@@ -316,24 +448,23 @@
                 }
             }
             
-            // Se chegou aqui, todas as URLs falharam
+            // Todas as URLs falharam
             statusBar.className = "status-bar status-error";
-            statusBar.innerHTML = "❌ Erro ao carregar dados. <br><small>Verifique se o arquivo Excel está público no GitHub.</small>";
+            statusBar.innerHTML = "❌ Erro ao carregar dados. Verifique o arquivo no GitHub.";
             headerSubtitle.textContent = "Erro na base de dados";
-            console.error("Todas as URLs falharam");
         }
 
         // Função de busca
-        function buscarProduto() {
-            const ean = eanInput.value.trim();
+        function buscarProduto(eanBuscado = null) {
+            const ean = eanBuscado || eanInput.value.trim();
             
             if (!ean) {
-                mostrarResultado("not-found", "Digite um código EAN", ean);
+                mostrarResultado("not-found", "Digite ou escaneie um código EAN");
                 return;
             }
             
             if (produtos.length === 0) {
-                mostrarResultado("not-found", "Base de dados não carregada", ean);
+                mostrarResultado("not-found", "Base de dados não carregada");
                 return;
             }
             
@@ -344,26 +475,166 @@
                 resultBox.innerHTML = `
                     <div class="result-icon">✅</div>
                     <div class="result-title">Produto Encontrado!</div>
-                    <div class="result-ean">EAN: ${encontrado.ean}</div>
-                    <br>
+                    
+                    <div class="product-details">
+                        <div class="detail-row">
+                            <span class="detail-label">📊 EAN:</span>
+                            <span class="detail-value">${encontrado.ean}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">🆔 ID:</span>
+                            <span class="detail-value">${encontrado.id || "N/A"}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">📦 Produto:</span>
+                            <span class="detail-value">${encontrado.nome || "N/A"}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">📂 Subcategoria:</span>
+                            <span class="detail-value">${encontrado.subcategoria || "N/A"}</span>
+                        </div>
+                    </div>
+                    
                     <a href="${encontrado.link}" target="_blank" class="link-button">
                         📎 Abrir Documento do Produto
                     </a>
                 `;
             } else {
+                // Buscar produtos da mesma subcategoria
+                const subcategoriaSelecionada = subcategorySelect.value;
+                const produtosRelacionados = produtos.filter(p => 
+                    subcategoriaSelecionada && p.subcategoria === subcategoriaSelecionada
+                );
+                
+                let htmlRelacionados = "";
+                if (produtosRelacionados.length > 0) {
+                    htmlRelacionados = `
+                        <div style="margin-top: 15px;">
+                            <p style="color: #666; margin-bottom: 10px;">
+                                📂 Links da subcategoria <strong>"${subcategoriaSelecionada}"</strong>:
+                            </p>
+                            <div class="subcategory-links">
+                                ${produtosRelacionados.slice(0, 10).map(p => `
+                                    <a href="${p.link}" target="_blank" class="subcategory-link">
+                                        ${p.nome || p.id || "Ver documento"}
+                                    </a>
+                                `).join("")}
+                            </div>
+                            ${produtosRelacionados.length > 10 ? `<p style="color: #999; margin-top: 5px;">...e mais ${produtosRelacionados.length - 10} itens</p>` : ""}
+                        </div>
+                    `;
+                }
+                
                 resultBox.className = "result-box not-found show";
                 resultBox.innerHTML = `
                     <div class="result-icon">❌</div>
                     <div class="result-title">Item Não Encontrado no Planograma</div>
-                    <div class="result-ean">EAN: ${ean}</div>
-                    <p class="result-message">Este código não foi localizado na base de dados.</p>
+                    <p style="color: #666;">EAN: <strong>${ean}</strong></p>
+                    <p style="color: #999; margin-top: 5px;">Este código não foi localizado na base de dados.</p>
+                    ${htmlRelacionados}
                 `;
             }
             
             resultBox.scrollIntoView({ behavior: "smooth", block: "center" });
         }
 
-        // Evento Enter
+        // Filtrar por subcategoria
+        function filtrarPorSubcategoria() {
+            const subcategoria = subcategorySelect.value;
+            
+            if (!subcategoria) {
+                resultBox.className = "result-box";
+                resultBox.classList.remove("show");
+                return;
+            }
+            
+            const produtosFiltrados = produtos.filter(p => p.subcategoria === subcategoria);
+            
+            if (produtosFiltrados.length > 0) {
+                resultBox.className = "result-box found show";
+                resultBox.innerHTML = `
+                    <div class="result-icon">📂</div>
+                    <div class="result-title">Subcategoria: ${subcategoria}</div>
+                    <p style="color: #666;">${produtosFiltrados.length} produto(s) encontrado(s)</p>
+                    <div class="subcategory-links" style="margin-top: 15px;">
+                        ${produtosFiltrados.slice(0, 20).map(p => `
+                            <a href="${p.link}" target="_blank" class="subcategory-link" style="display: block; text-align: left; margin-bottom: 5px;">
+                                🆔 ${p.id || "N/A"} | 📦 ${p.nome || "N/A"} | 📊 ${p.ean}
+                            </a>
+                        `).join("")}
+                    </div>
+                    ${produtosFiltrados.length > 20 ? `<p style="color: #999; margin-top: 10px;">...e mais ${produtosFiltrados.length - 20} itens</p>` : ""}
+                `;
+            } else {
+                resultBox.className = "result-box not-found show";
+                resultBox.innerHTML = `
+                    <div class="result-icon">📭</div>
+                    <div class="result-title">Nenhum produto nesta subcategoria</div>
+                `;
+            }
+        }
+
+        // Scanner de código de barras
+        function toggleScanner() {
+            if (scannerAtivo) {
+                pararScanner();
+            } else {
+                iniciarScanner();
+            }
+        }
+
+        async function iniciarScanner() {
+            try {
+                scannerContainer.classList.add("active");
+                scannerButton.classList.add("active");
+                scannerButton.textContent = "⏹";
+                
+                if (!html5QrCode) {
+                    html5QrCode = new Html5Qrcode("reader");
+                }
+                
+                await html5QrCode.start(
+                    { facingMode: "environment" },
+                    {
+                        fps: 10,
+                        qrbox: { width: 250, height: 100 }
+                    },
+                    (decodedText) => {
+                        // Código de barras lido com sucesso
+                        eanInput.value = decodedText;
+                        pararScanner();
+                        buscarProduto(decodedText);
+                    },
+                    (errorMessage) => {
+                        // Erro de leitura (ignorar)
+                    }
+                );
+                
+                scannerAtivo = true;
+                
+            } catch (erro) {
+                console.error("Erro ao iniciar scanner:", erro);
+                alert("Erro ao acessar a câmera. Verifique as permissões.");
+                pararScanner();
+            }
+        }
+
+        async function pararScanner() {
+            if (html5QrCode && scannerAtivo) {
+                try {
+                    await html5QrCode.stop();
+                } catch (erro) {
+                    console.error("Erro ao parar scanner:", erro);
+                }
+            }
+            
+            scannerContainer.classList.remove("active");
+            scannerButton.classList.remove("active");
+            scannerButton.textContent = "📷";
+            scannerAtivo = false;
+        }
+
+        // Eventos
         eanInput.addEventListener("keypress", function(e) {
             if (e.key === "Enter" && !searchButton.disabled) {
                 buscarProduto();

@@ -216,7 +216,7 @@
 
         <div class="content">
             <div id="statusBar" class="status-bar status-loading">
-                ⏳ Carregando dados do GitHub...
+                ⏳ Carregando dados...
             </div>
 
             <div class="search-box">
@@ -239,8 +239,12 @@
     </div>
 
     <script>
-        // ⚠️ COLOQUE AQUI O LINK RAW DO SEU ARQUIVO NO GITHUB
-        const GITHUB_RAW_URL = "https://github.com/Gc-koch/consulta_item_pln/raw/refs/heads/main/LINK%20PRODUTO.xlsx";
+        // Links alternativos para tentar carregar o arquivo
+        const URLS = [
+            "https://raw.githubusercontent.com/Gc-koch/consulta_item_pln/main/LINK%20PRODUTO.xlsx",
+            "https://github.com/Gc-koch/consulta_item_pln/raw/main/LINK%20PRODUTO.xlsx",
+            "https://github.com/Gc-koch/consulta_item_pln/raw/refs/heads/main/LINK%20PRODUTO.xlsx"
+        ];
         
         let produtos = [];
         
@@ -251,56 +255,72 @@
         const recordsInfo = document.getElementById("recordsInfo");
         const headerSubtitle = document.getElementById("headerSubtitle");
 
-        // Função para carregar o Excel do GitHub
+        // Função para tentar carregar de múltiplas URLs
         async function carregarDados() {
-            try {
-                statusBar.className = "status-bar status-loading";
-                statusBar.textContent = "⏳ Carregando dados do GitHub...";
-                
-                const resposta = await fetch(GITHUB_RAW_URL);
-                
-                if (!resposta.ok) {
-                    throw new Error("Arquivo não encontrado");
-                }
-                
-                const arrayBuffer = await resposta.arrayBuffer();
-                const workbook = XLSX.read(arrayBuffer, { type: "array" });
-                
-                const primeiraPlanilha = workbook.SheetNames[0];
-                const planilha = workbook.Sheets[primeiraPlanilha];
-                const dados = XLSX.utils.sheet_to_json(planilha, { header: 1 });
-                
-                produtos = [];
-                
-                for (let i = 1; i < dados.length; i++) {
-                    const linha = dados[i];
-                    if (linha && linha[0] && linha[3]) {
-                        const ean = String(linha[0]).trim();
-                        const link = String(linha[3]).trim();
-                        
-                        if (ean && link && ean !== "undefined" && link !== "undefined") {
-                            produtos.push({ ean, link });
+            for (let i = 0; i < URLS.length; i++) {
+                try {
+                    statusBar.className = "status-bar status-loading";
+                    statusBar.textContent = `⏳ Tentando carregar dados... (${i + 1}/${URLS.length})`;
+                    
+                    console.log("Tentando URL:", URLS[i]);
+                    
+                    const resposta = await fetch(URLS[i], {
+                        mode: 'cors',
+                        credentials: 'omit'
+                    });
+                    
+                    if (!resposta.ok) {
+                        console.log("URL falhou:", URLS[i], "Status:", resposta.status);
+                        continue;
+                    }
+                    
+                    const arrayBuffer = await resposta.arrayBuffer();
+                    const workbook = XLSX.read(arrayBuffer, { type: "array" });
+                    
+                    const primeiraPlanilha = workbook.SheetNames[0];
+                    const planilha = workbook.Sheets[primeiraPlanilha];
+                    const dados = XLSX.utils.sheet_to_json(planilha, { header: 1 });
+                    
+                    produtos = [];
+                    
+                    for (let j = 1; j < dados.length; j++) {
+                        const linha = dados[j];
+                        if (linha && linha[0] && linha[3]) {
+                            const ean = String(linha[0]).trim();
+                            const link = String(linha[3]).trim();
+                            
+                            if (ean && link && ean !== "undefined" && link !== "undefined") {
+                                produtos.push({ ean, link });
+                            }
                         }
                     }
+                    
+                    // Sucesso!
+                    statusBar.className = "status-bar status-success";
+                    statusBar.textContent = `✅ ${produtos.length} produtos carregados com sucesso!`;
+                    headerSubtitle.textContent = "Base de dados pronta para consulta";
+                    
+                    eanInput.disabled = false;
+                    searchButton.disabled = false;
+                    eanInput.focus();
+                    
+                    recordsInfo.textContent = `${produtos.length} produtos disponíveis para consulta`;
+                    
+                    console.log("✅ Carregado com sucesso da URL:", URLS[i]);
+                    console.log("📦 Produtos:", produtos.slice(0, 3), "...");
+                    return;
+                    
+                } catch (erro) {
+                    console.error("Erro na URL:", URLS[i], erro);
+                    continue;
                 }
-                
-                // Dados carregados com sucesso
-                statusBar.className = "status-bar status-success";
-                statusBar.textContent = `✅ ${produtos.length} produtos carregados com sucesso!`;
-                headerSubtitle.textContent = "Base de dados pronta para consulta";
-                
-                eanInput.disabled = false;
-                searchButton.disabled = false;
-                eanInput.focus();
-                
-                recordsInfo.textContent = `${produtos.length} produtos disponíveis para consulta`;
-                
-            } catch (erro) {
-                console.error("Erro:", erro);
-                statusBar.className = "status-bar status-error";
-                statusBar.textContent = "❌ Erro ao carregar dados. Verifique o link do GitHub.";
-                headerSubtitle.textContent = "Erro na base de dados";
             }
+            
+            // Se chegou aqui, todas as URLs falharam
+            statusBar.className = "status-bar status-error";
+            statusBar.innerHTML = "❌ Erro ao carregar dados. <br><small>Verifique se o arquivo Excel está público no GitHub.</small>";
+            headerSubtitle.textContent = "Erro na base de dados";
+            console.error("Todas as URLs falharam");
         }
 
         // Função de busca
